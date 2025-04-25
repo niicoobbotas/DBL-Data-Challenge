@@ -1,3 +1,6 @@
+import json
+json_file_path = r'C:\Users\20243314\OneDrive - TU Eindhoven\Desktop\Quartile 4\DBL Data Challenge\Dataset\airlines-1558527599826.json'
+
 def extract_relevant_info(tweet):
     return {
         'created_at': tweet.get('created_at'),
