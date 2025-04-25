@@ -1,0 +1,60 @@
+import json
+import os
+
+# Input directory containing JSON files
+json_dir_path = "C:\\Users\\nicol\\OneDrive - TU Eindhoven\\Desktop\\Data Challenge\\data"
+
+# Output directory to store cleaned JSON files
+output_dir_path = "C:\\Users\\nicol\\OneDrive - TU Eindhoven\\Desktop\\Data Challenge\\datacleaned_tweets"
+
+# Create the output directory if it doesn't exist
+os.makedirs(output_dir_path, exist_ok=True)
+
+def extract_relevant_info(tweet):
+
+    urls = tweet.get('entities', {}).get('urls', [])
+    cleaned_urls = [{'url': url.get('url'), 'display_url': url.get('display_url')} for url in urls]
+
+    return {
+        'created_at': tweet.get('created_at'),
+        'id': tweet.get('id'),
+        'text': tweet.get('text') or tweet.get('extended_tweet', {}).get('full_text'),
+        'lang': tweet.get('lang'),
+        'retweet_count': tweet.get('retweet_count'),
+        'favorite_count': tweet.get('favorite_count'),
+        'user': {
+            'id': tweet.get('user', {}).get('id'),
+            'screen_name': tweet.get('user', {}).get('screen_name'),
+            'name': tweet.get('user', {}).get('name'),
+            'followers_count': tweet.get('user', {}).get('followers_count'),
+            'friends_count': tweet.get('user', {}).get('friends_count'),
+            'favourites_count': tweet.get('user', {}).get('favourites_count'),
+            'statuses_count': tweet.get('user', {}).get('statuses_count'),
+            'verified': tweet.get('user', {}).get('verified'),
+            'location': tweet.get('user', {}).get('location'),
+            'created_at': tweet.get('user', {}).get('created_at')
+        },
+        'entities': {
+            'hashtags': tweet.get('entities', {}).get('hashtags'),
+            'user_mentions': tweet.get('entities', {}).get('user_mentions'),
+            'urls': cleaned_urls,
+            'symbols': tweet.get('entities', {}).get('symbols'),
+        }
+    }
+
+# Loop through all JSON files in the directory
+for filename in os.listdir(json_dir_path):
+    if filename.endswith('.json'):
+        json_file_path = os.path.join(json_dir_path, filename)
+        output_file_path = os.path.join(output_dir_path, f"cleaned_{filename}")
+        
+        with open(json_file_path, 'r', encoding='utf-8') as file, open(output_file_path, 'w', encoding='utf-8') as output_file:
+            # Process each line as a separate JSON object
+            for line in file:
+                try:
+                    tweet = json.loads(line.strip())  # Parse each line as JSON
+                    cleaned_tweet = extract_relevant_info(tweet)
+                    # Write the cleaned tweet as a single line in the output file
+                    output_file.write(json.dumps(cleaned_tweet, ensure_ascii=False) + '\n')
+                except json.JSONDecodeError as e:
+                    print(f"Skipping invalid JSON in {filename}: {e}")
