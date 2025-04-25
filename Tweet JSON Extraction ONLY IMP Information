@@ -1,0 +1,34 @@
+import json
+
+json_file_path = 'airlines-1558527599826.json'
+
+def extract_relevant_info(tweet):
+    return {
+        'created_at': tweet.get('created_at'),
+        'id': tweet.get('id'),
+        'text': tweet.get('text') or tweet.get('extended_tweet', {}).get('full_text'),
+        'lang': tweet.get('lang'),
+        'retweet_count': tweet.get('retweet_count'),
+        'favorite_count': tweet.get('favorite_count'),
+        'user': {
+            'id': tweet.get('user', {}).get('id'),
+            'screen_name': tweet.get('user', {}).get('screen_name'),
+            'name': tweet.get('user', {}).get('name'),
+            'followers_count': tweet.get('user', {}).get('followers_count'),
+            'friends_count': tweet.get('user', {}).get('friends_count'),
+            'favourites_count': tweet.get('user', {}).get('favourites_count'),
+            'statuses_count': tweet.get('user', {}).get('statuses_count'),
+            'verified': tweet.get('user', {}).get('verified'),
+            'location': tweet.get('user', {}).get('location'),
+            'created_at': tweet.get('user', {}).get('created_at')
+        },
+        'entities': tweet.get('entities', {})
+    }
+
+with open(json_file_path, 'r', encoding='utf-8') as file:
+    first_line = file.readline()
+    tweet = json.loads(first_line)
+    cleaned_tweet = extract_relevant_info(tweet)
+
+import pprint
+pprint.pprint(cleaned_tweet)
