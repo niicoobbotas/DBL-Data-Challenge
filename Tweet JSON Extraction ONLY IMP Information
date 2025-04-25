@@ -1,7 +1,3 @@
-import json
-
-json_file_path = 'airlines-1558527599826.json'
-
 def extract_relevant_info(tweet):
     return {
         'created_at': tweet.get('created_at'),
@@ -22,13 +18,16 @@ def extract_relevant_info(tweet):
             'location': tweet.get('user', {}).get('location'),
             'created_at': tweet.get('user', {}).get('created_at')
         },
-        'entities': tweet.get('entities', {})
+        'entities': {
+            'hashtags': tweet.get('entities', {}).get('hashtags'),
+            'user_mentions': tweet.get('entities', {}).get('user_mentions'),
+            'urls': tweet.get('entities', {}).get('urls'),
+            'symbols': tweet.get('entities', {}).get('symbols'),
+        }
     }
-
-with open(json_file_path, 'r', encoding='utf-8') as file:
+with open(json_file_path, 'r', encoding = 'utf-8') as file:
     first_line = file.readline()
     tweet = json.loads(first_line)
     cleaned_tweet = extract_relevant_info(tweet)
 
-import pprint
-pprint.pprint(cleaned_tweet)
+print(cleaned_tweet)
