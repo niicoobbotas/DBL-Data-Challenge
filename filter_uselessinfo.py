@@ -71,7 +71,7 @@ for filename in tqdm(os.listdir(json_dir_path), desc="Dosyalar işleniyor"):
                     tweet = json.loads(line.strip())
                     cleaned_tweet = extract_relevant_info(tweet)
 
-                    # ✅ Eğer havayolu şirket ismi varsa kaydet
+                    # Eğer havayolu şirket ismi varsa kaydet
                     tweet_text = cleaned_tweet.get('text', '')
                     if contains_airline_name(tweet_text):
                         output_file.write(json.dumps(cleaned_tweet, ensure_ascii=False) + '\n')
