@@ -1,4 +1,3 @@
-
 import json
 import os
 
@@ -19,6 +18,7 @@ airline_names = [
 ]
 
 def extract_relevant_info(tweet):
+    """Extract relevant information from a tweet."""
     # Clean the URLs by removing unnecessary fields
     urls = tweet.get('entities', {}).get('urls', [])
     cleaned_urls = [{'url': url.get('url'), 'display_url': url.get('display_url')} for url in urls]
@@ -60,13 +60,6 @@ def extract_relevant_info(tweet):
         }
     }
 
-def contains_airline_name(text):
-    """Check if the tweet contains an airline name."""
-    if text is None:
-        return False
-    text = text.lower()
-    return any(airline.lower() in text for airline in airline_names)
-
 def contains_airline_name_or_is_quote_or_reply(tweet):
     """Check if the tweet contains an airline name, is a quote, or is a reply."""
     text = tweet.get('text', None)
@@ -91,25 +84,22 @@ for filename in os.listdir(json_dir_path):
         # Count the total number of lines in the file for progress tracking
         total_lines = sum(1 for _ in open(json_file_path, 'r', encoding='utf-8'))
 
-        cleaned_tweets = [] 
+        cleaned_tweets = []  # Initialize the list to store cleaned tweets
 
-        with open(json_file_path, 'r', encoding='utf-8') as file, open(output_file_path, 'w', encoding='utf-8') as output_file:
-            line_number = 0
+        with open(json_file_path, 'r', encoding='utf-8') as file:
             for line in file:
-                line_number += 1
                 try:
                     tweet = json.loads(line.strip())
                     cleaned_tweet = extract_relevant_info(tweet)
 
-                    # Save the tweet only if it contains an airline name
-                    tweet_text = cleaned_tweet.get('text', '')
-                    if contains_airline_name(tweet_text):
-                        output_file.write(json.dumps(cleaned_tweet, ensure_ascii=False) + '\n')
+                    # Save the tweet if it contains an airline name, is a quote, or is a reply
+                    if contains_airline_name_or_is_quote_or_reply(tweet):
+                        cleaned_tweets.append(cleaned_tweet)
 
                 except json.JSONDecodeError as e:
                     print(f"Skipping invalid JSON in {filename}: {e}")
 
-
-    with open(output_file_path, 'w', encoding='utf-8') as output_file:
-        json.dump(cleaned_tweets, output_file, ensure_ascii=False, indent=2)
-        
+        # Write all cleaned tweets to the output file
+        with open(output_file_path, 'w', encoding='utf-8') as output_file:
+            for cleaned_tweet in cleaned_tweets:
+                output_file.write(json.dumps(cleaned_tweet, ensure_ascii=False) + '\n')
