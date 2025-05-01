@@ -72,3 +72,7 @@ for filename in os.listdir(json_dir_path):
                     output_file.write(json.dumps(cleaned_tweet, ensure_ascii=False) + '\n')
                 except json.JSONDecodeError as e:
                     print(f"Skipping invalid JSON in {filename}: {e}")
+                    
+         # Now write the full list to one output file as a proper JSON array
+        with open(output_file_path, 'w', encoding='utf-8') as output_file:
+            json.dump(cleaned_tweets, output_file, ensure_ascii=False, indent=2)
