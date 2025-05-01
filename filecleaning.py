@@ -10,8 +10,15 @@ output_dir_path = "C:\\Users\\nicol\\OneDrive - TU Eindhoven\\Desktop\\Data Chal
 # Create the output directory if it doesn't exist
 os.makedirs(output_dir_path, exist_ok=True)
 
-def extract_relevant_info(tweet):
+# List of airline company names
+airline_names = [
+    'KLM', 'AirFrance', 'British_Airways', 'AmericanAir', 'Lufthansa',
+    'AirBerlin', 'AirBerlin assist', 'easyJet', 'RyanAir',
+    'SingaporeAir', 'Qantas', 'EtihadAirways', 'VirginAtlantic'
+]
 
+def extract_relevant_info(tweet):
+    # Clean the URLs by removing unnecessary fields
     urls = tweet.get('entities', {}).get('urls', [])
     cleaned_urls = [{'url': url.get('url'), 'display_url': url.get('display_url')} for url in urls]
 
@@ -22,6 +29,15 @@ def extract_relevant_info(tweet):
         'lang': tweet.get('lang'),
         'retweet_count': tweet.get('retweet_count'),
         'favorite_count': tweet.get('favorite_count'),
+        'in_reply_to_status_id': tweet.get('in_reply_to_status_id'),
+        'in_reply_to_user_id': tweet.get('in_reply_to_user_id'),
+        'in_reply_to_screen_name': tweet.get('in_reply_to_screen_name'),
+        'is_quote_status': tweet.get('is_quote_status'),
+        'quote_count': tweet.get('quote_count'),
+        'reply_count': tweet.get('reply_count'),
+        'place': tweet.get('place'),
+        'favorited': tweet.get('favorited'),
+        'retweeted': tweet.get('retweeted'),
         'user': {
             'id': tweet.get('user', {}).get('id'),
             'screen_name': tweet.get('user', {}).get('screen_name'),
@@ -32,6 +48,7 @@ def extract_relevant_info(tweet):
             'statuses_count': tweet.get('user', {}).get('statuses_count'),
             'verified': tweet.get('user', {}).get('verified'),
             'location': tweet.get('user', {}).get('location'),
+            'time_zone': tweet.get('user', {}).get('time_zone'),
             'created_at': tweet.get('user', {}).get('created_at')
         },
         'entities': {
@@ -42,19 +59,51 @@ def extract_relevant_info(tweet):
         }
     }
 
+def contains_airline_name(text):
+    """Check if the tweet contains an airline name."""
+    if text is None:
+        return False
+    text = text.lower()
+    return any(airline.lower() in text for airline in airline_names)
+
+def contains_airline_name_or_is_quote_or_reply(tweet):
+    """Check if the tweet contains an airline name, is a quote, or is a reply."""
+    text = tweet.get('text', None)
+    is_quote = tweet.get('is_quote_status', False)
+    is_reply = tweet.get('in_reply_to_status_id') is not None
+
+    if text is not None:
+        text = text.lower()
+        contains_airline = any(airline.lower() in text for airline in airline_names)
+    else:
+        contains_airline = False
+
+    return contains_airline or is_quote or is_reply
+
 # Loop through all JSON files in the directory
 for filename in os.listdir(json_dir_path):
+    print(f"Processing file: {filename}")
     if filename.endswith('.json'):
         json_file_path = os.path.join(json_dir_path, filename)
         output_file_path = os.path.join(output_dir_path, f"cleaned_{filename}")
-        
+
+        # Count the total number of lines in the file for progress tracking
+        total_lines = sum(1 for _ in open(json_file_path, 'r', encoding='utf-8'))
+
         with open(json_file_path, 'r', encoding='utf-8') as file, open(output_file_path, 'w', encoding='utf-8') as output_file:
-            # Process each line as a separate JSON object
+            line_number = 0
             for line in file:
+                line_number += 1
                 try:
-                    tweet = json.loads(line.strip())  # Parse each line as JSON
+                    tweet = json.loads(line.strip())
                     cleaned_tweet = extract_relevant_info(tweet)
-                    # Write the cleaned tweet as a single line in the output file
-                    output_file.write(json.dumps(cleaned_tweet, ensure_ascii=False) + '\n')
+
+                    # Save the tweet only if it contains an airline name
+                    tweet_text = cleaned_tweet.get('text', '')
+                    if contains_airline_name(tweet_text):
+                        output_file.write(json.dumps(cleaned_tweet, ensure_ascii=False) + '\n')
+
                 except json.JSONDecodeError as e:
                     print(f"Skipping invalid JSON in {filename}: {e}")
+
+        
