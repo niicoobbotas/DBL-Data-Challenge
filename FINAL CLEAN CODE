@@ -5,7 +5,7 @@ import os
 json_dir_path = "C:\\Users\\nicol\\OneDrive - TU Eindhoven\\Desktop\\Data Challenge\\data"
 
 # Output directory to store cleaned JSON files
-output_dir_path = "C:\\Users\\nicol\\OneDrive - TU Eindhoven\\Desktop\\Data Challenge\\datacleaned_tweets"
+output_dir_path = "C:\\Users\\nicol\\OneDrive - TU Eindhoven\\Desktop\\Data Challenge\\datacleanedtweets"
 
 # Create the output directory if it doesn't exist
 os.makedirs(output_dir_path, exist_ok=True)
@@ -76,30 +76,28 @@ def contains_airline_name_or_is_quote_or_reply(tweet):
 
 # Loop through all JSON files in the directory
 for filename in os.listdir(json_dir_path):
-    print(f"Processing file: {filename}")
     if filename.endswith('.json'):
+        print(f"Processing file: {filename}")
         json_file_path = os.path.join(json_dir_path, filename)
         output_file_path = os.path.join(output_dir_path, f"cleaned_{filename}")
 
-        # Count the total number of lines in the file for progress tracking
-        total_lines = sum(1 for _ in open(json_file_path, 'r', encoding='utf-8'))
+        # Initialize the list to store cleaned tweets
+        cleaned_tweets = []
 
-        cleaned_tweets = []  # Initialize the list to store cleaned tweets
-
+        # Read and process the file line by line
         with open(json_file_path, 'r', encoding='utf-8') as file:
             for line in file:
                 try:
                     tweet = json.loads(line.strip())
                     cleaned_tweet = extract_relevant_info(tweet)
 
-                    # Save the tweet if it contains an airline name, is a quote, or is a reply
+                    # Add the tweet to the list if it meets the criteria
                     if contains_airline_name_or_is_quote_or_reply(tweet):
                         cleaned_tweets.append(cleaned_tweet)
 
                 except json.JSONDecodeError as e:
                     print(f"Skipping invalid JSON in {filename}: {e}")
 
-        # Write all cleaned tweets to the output file
+        # Write all cleaned tweets as a JSON array to the output file
         with open(output_file_path, 'w', encoding='utf-8') as output_file:
-            for cleaned_tweet in cleaned_tweets:
-                output_file.write(json.dumps(cleaned_tweet, ensure_ascii=False) + '\n')
+            json.dump(cleaned_tweets, output_file, ensure_ascii=False, indent=4)
