@@ -30,7 +30,7 @@ def extract_relevant_info(tweet):
         'quote_count': tweet.get('quote_count'),
         'reply_count': tweet.get('reply_count'),
         'favorited': tweet.get('favorited'),
-        'retweeded': tweet.get('retweeded'),
+        'retweeted': tweet.get('retweeted'),
         'place': tweet.get('place'),
         'user': {
             'id': tweet.get('user', {}).get('id'),
