@@ -1,1 +1,286 @@
+import json
+import os
+import re
+from dateutil.parser import parse  # please install this in terminal: pip install python-dateutil 
+
+
+json_dir_path = "/Users/shibai/Documents/TUE study materials/TUE 2024/JBG030 DBL Data/dbl_data_2025" # pelase change the path
+output_dir_path = os.path.join(json_dir_path, "../twitter_data_final") # No need to change
+os.makedirs(output_dir_path, exist_ok=True)
+
+airline_names = [
+    'KLM', 'AirFrance', 'British_Airways', 'AmericanAir', 'Lufthansa',
+    'AirBerlin', 'AirBerlin assist', 'easyJet', 'RyanAir',
+    'SingaporeAir', 'Qantas', 'EtihadAirways', 'VirginAtlantic'
+]
+
+#Here we can use regular expressions to avoid falsely match like "BKLML" — which might not actually mention the airline.
+#Please feel free to discuss it if you disagree
+airline_patterns = [re.compile(rf'\b{re.escape(name.lower())}\b') for name in airline_names]
+
+# Spam Keywords is used for the function def clean_text
+spam_keywords = ['spam', 'scam', 'fake ticket', 'buy now']
+
+# This criteria is used for determining werid account later
+WEIRD_CRITERIA = {
+    'max_age_days': 30,
+    'min_followers': 5
+}
+
+def clean_text(text):
+    if not text:
+        return ""
+    text = text.lower()
+    for keyword in spam_keywords:
+        text = text.replace(keyword, '')
+    return ' '.join(text.split())
+
+# We need extract_full_text() to ensure we get the full tweet content, including long tweets and retweets. 
+# Without it, we might miss important text that's stored in nested fields.
+def extract_full_text(tweet):
+    """Extract full text from tweet, handling retweets and different formats."""
+    source = tweet
+    if 'retweeted_status' in tweet:
+        source = tweet['retweeted_status']
+    return (
+        source.get('full_text') or 
+        source.get('extended_tweet', {}).get('full_text') or 
+        source.get('text') or ''
+    )
+
+# We use validate_tweet() to check that each tweet has the essential fields (like text, id, created_at, and user). 
+# This helps prevent errors and ensures only complete, usable tweets are processed.
+def validate_tweet(tweet):
+    required_fields = ['created_at', 'id', 'text', 'user']
+    missing = [field for field in required_fields if field not in tweet or tweet[field] is None]
+    if missing:
+        return False, f"Missing fields: {', '.join(missing)}"
+    return True, ""
+
+def extract_relevant_info(tweet):
+    text = extract_full_text(tweet)
+    cleaned_text = clean_text(text)
+    urls = tweet.get('entities', {}).get('urls', [])
+    cleaned_urls = [{'url': url.get('url'), 'display_url': url.get('display_url')} for url in urls]
+
+    return {
+        'created_at': tweet.get('created_at'),
+        'id': tweet.get('id'),
+        'text': cleaned_text,
+        'lang': tweet.get('lang'),
+        'retweet_count': tweet.get('retweet_count'),
+        'favorite_count': tweet.get('favorite_count'),
+        'in_reply_to_status_id': tweet.get('in_reply_to_status_id'),
+        'in_reply_to_user_id': tweet.get('in_reply_to_user_id'),
+        'in_reply_to_screen_name': tweet.get('in_reply_to_screen_name'),
+        'is_quote_status': tweet.get('is_quote_status'),
+        'quote_count': tweet.get('quote_count'),
+        'reply_count': tweet.get('reply_count'),
+        'place': tweet.get('place'),
+        'favorited': tweet.get('favorited'),
+        'retweeted': tweet.get('retweeted'),
+        'user': {
+            'id': tweet.get('user', {}).get('id'),
+            'screen_name': tweet.get('user', {}).get('screen_name'),
+            'name': tweet.get('user', {}).get('name'),
+            'followers_count': tweet.get('user', {}).get('followers_count'),
+            'friends_count': tweet.get('user', {}).get('friends_count'),
+            'favourites_count': tweet.get('user', {}).get('favourites_count'),
+            'statuses_count': tweet.get('user', {}).get('statuses_count'),
+            'verified': tweet.get('user', {}).get('verified'),
+            'location': tweet.get('user', {}).get('location'),
+            'time_zone': tweet.get('user', {}).get('time_zone'),
+            'created_at': tweet.get('user', {}).get('created_at')
+        },
+        'entities': {
+            'hashtags': tweet.get('entities', {}).get('hashtags'),
+            'user_mentions': tweet.get('entities', {}).get('user_mentions'),
+            'urls': cleaned_urls,
+            'symbols': tweet.get('entities', {}).get('symbols'),
+        }
+    }
+
+# I used the score method to determine werid accont, please feel free to discuss the weight value and threshhold value 
+def is_weird_account(user, tweet_created_at=None):
+    if not user:
+        return True, ["missing_user_info"]
+
+    followers = user.get('followers_count', 0)
+    friends = user.get('friends_count', 0)
+    statuses = user.get('statuses_count', 0)
+    screen_name = user.get('screen_name', '')
+    created_at = user.get('created_at', '')
+    verified = user.get('verified', False)
+
+    score = 0.0
+    reasons = []
+
+    if followers < 5 and statuses > 5000:
+        score += 1.0
+        reasons.append("low_followers_high_activity")
+
+    if followers < 5 and friends > 500:
+        score += 1.0 if not verified else 0.5
+        reasons.append("spammy_follow_ratio")
+
+    if statuses < 10:
+        score += 1.0
+        reasons.append("very_low_tweet_count")
+
+    if re.fullmatch(r'[a-zA-Z]*\d{5,}', screen_name):
+        score += 0.5
+        reasons.append("autogen_screen_name")
+
+    if not verified:
+        score += 0.5
+        reasons.append("not_verified")
+
+    if created_at and tweet_created_at:
+        try:
+            user_created = parse(created_at, fuzzy=False)
+            tweet_created = parse(tweet_created_at, fuzzy=False)
+            age_days = (tweet_created - user_created).days
+            if age_days < WEIRD_CRITERIA['max_age_days'] and statuses > 500 and followers < WEIRD_CRITERIA['min_followers']:
+                score += 1
+                reasons.append("new_active_no_followers")
+        except ValueError:
+            reasons.append("invalid_date_format")
+
+    if score >= 1:
+        reasons.append(f"score={score}")
+        return True, reasons
+    return False, []
+
+def contains_airline_name_or_is_quote_or_reply(tweet):
+    text = extract_full_text(tweet)
+    is_quote = tweet.get('is_quote_status', False)
+    is_reply = tweet.get('in_reply_to_status_id') is not None
+    contains_airline = any(pattern.search(text.lower()) for pattern in airline_patterns)
+    return contains_airline or is_quote or is_reply
+
+json_files = [f for f in os.listdir(json_dir_path) if f.endswith('.json')]
+total_files = len(json_files)
+skipped_files = []
+empty_files = []
+file_stats = []
+
+print(f"Found {total_files} JSON files to process.")
+
+# I modified the code below, because the order ( print(f"Skipping invalid JSON in {filename}: {e}")) was too aggressive. 
+# It meant one bad tweet could prevent processing the rest. I will show the screenshot as i see many json files are skipped directly.
+# So the code below is used to avoid skip the whole file if one Tweet is Bad
+for filename in json_files:
+    print(f"Processing {filename}")
+    json_file_path = os.path.join(json_dir_path, filename)
+    output_file_path = os.path.join(output_dir_path, f"cleaned_{filename}")
+
+    cleaned_tweets = []
+    stats = {
+        'total_lines': 0,
+        'valid_lines': 0,
+        'invalid_lines': 0,
+        'filtered_lines': 0,
+        'weird_accounts': 0,
+        'irrelevant': 0,
+        'tweets_saved': 0,
+        'reasons_filtered': []
+    }
+
+    try:
+        with open(json_file_path, 'r', encoding='utf-8') as file:
+            for line in file:
+                stats['total_lines'] += 1
+                try:
+                    tweet = json.loads(line.strip())
+                    is_valid, reason = validate_tweet(tweet)
+                    if not is_valid:
+                        stats['invalid_lines'] += 1
+                        stats['reasons_filtered'].append(reason)
+                        continue
+                    stats['valid_lines'] += 1
+                    if contains_airline_name_or_is_quote_or_reply(tweet):
+                        is_weird, reasons = is_weird_account(tweet.get('user', {}), tweet.get('created_at'))
+                        if is_weird:
+                            stats['weird_accounts'] += 1
+                            stats['filtered_lines'] += 1
+                            stats['reasons_filtered'].extend(reasons)
+                        else:
+                            cleaned_tweet = extract_relevant_info(tweet)
+                            if cleaned_tweet['text']:
+                                cleaned_tweets.append(cleaned_tweet)
+                    else:
+                        stats['irrelevant'] += 1
+                        stats['filtered_lines'] += 1
+                        stats['reasons_filtered'].append("irrelevant_content")
+                except json.JSONDecodeError as e:
+                    stats['invalid_lines'] += 1
+                    stats['reasons_filtered'].append(str(e))
+    except Exception as e:
+        print(f"Error reading {filename}: {e}")
+        skipped_files.append(filename)
+        continue
+
+    stats['tweets_saved'] = len(cleaned_tweets)
+    if cleaned_tweets:
+        with open(output_file_path, 'w', encoding='utf-8') as output_file:
+            for cleaned_tweet in cleaned_tweets:
+                output_file.write(json.dumps(cleaned_tweet, ensure_ascii=False) + '\n')
+    else:
+        empty_files.append(filename)
+
+    file_stats.append(stats)
+
+# Below is used for Summary File 
+summary_path = os.path.join(output_dir_path, "processing_summary.txt")
+with open(summary_path, 'w', encoding='utf-8') as summary_file:
+    summary_file.write("=== Processing Summary ===\n")
+    summary_file.write(f"Total files processed: {total_files}\n")
+    summary_file.write(f"Files skipped due to read errors: {len(skipped_files)}\n")
+    summary_file.write(f"Files with no relevant tweets: {len(empty_files)}\n\n")
+    if skipped_files:
+        summary_file.write("Skipped files:\n")
+        for f in skipped_files:
+            summary_file.write(f"  - {f}\n")
+    if empty_files:
+        summary_file.write("\nEmpty files:\n")
+        for f in empty_files:
+            summary_file.write(f"  - {f}\n")
+    summary_file.write("\nPer-file stats:\n")
+    for i, stat in enumerate(file_stats):
+        summary_file.write(
+            f"{json_files[i]} — Total: {stat['total_lines']}, "
+            f"Valid: {stat['valid_lines']}, Invalid: {stat['invalid_lines']}, "
+            f"Filtered: {stat['filtered_lines']} (Weird: {stat['weird_accounts']}, Irrelevant: {stat['irrelevant']}), "
+            f"Tweets Saved: {stat['tweets_saved']}\n"
+        )
+        if stat['reasons_filtered']:
+            summary_file.write("  Reasons for filtering:\n")
+            for reason in stat['reasons_filtered']:
+                summary_file.write(f"    - {reason}\n")
+
+# This is used for collecting an overall Summary 
+total_processed = sum(stat['total_lines'] for stat in file_stats)
+total_valid = sum(stat['valid_lines'] for stat in file_stats)
+total_invalid = sum(stat['invalid_lines'] for stat in file_stats)
+total_filtered = sum(stat['filtered_lines'] for stat in file_stats)
+total_weird = sum(stat['weird_accounts'] for stat in file_stats)
+total_irrelevant = sum(stat['irrelevant'] for stat in file_stats)
+total_saved = sum(stat['tweets_saved'] for stat in file_stats)
+
+overall_summary = (
+    "\n=== Overall Summary ===\n"
+    f"Total tweets processed: {total_processed}\n"
+    f"  - Valid tweets: {total_valid}\n"
+    f"  - Invalid tweets removed: {total_invalid}\n"
+    f"  - Tweets removed due to weird accounts: {total_weird}\n"
+    f"  - Tweets removed as irrelevant: {total_irrelevant}\n"
+    f"Total tweets removed (invalid + filtered): {total_invalid + total_filtered}\n"
+    f"Total tweets kept (saved): {total_saved}\n"
+)
+
+print(overall_summary)
+with open(summary_path, 'a', encoding='utf-8') as summary_file:
+    summary_file.write(overall_summary)
+
+print(f"Detailed summary saved to: {summary_path}")
 
