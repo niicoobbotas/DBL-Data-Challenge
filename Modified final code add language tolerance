@@ -31,11 +31,11 @@ CONFIG = {
     "min_text_length_for_langdetect": 20
 }
 
-json_dir_path = "/Users/shibai/Documents/TUE study materials/TUE 2024/JBG030 DBL Data/dbl_data_2025"
-output_dir_path = os.path.join(json_dir_path, "../twitter_data_final")
+json_dir_path = "/Users/shibai/Documents/TUE study materials/TUE 2024/JBG030 DBL Data/dbl_data_2025"   # please change the folder path
+output_dir_path = os.path.join(json_dir_path, "../twitter_data_final")             # No need to change
 os.makedirs(output_dir_path, exist_ok=True)
 
-# Airline definitions use regular expression
+# Use regular expression patterns to help identify mentions of airline companies in tweet text, even when users spell or format the names differently.
 airline_variations = {
     'klm': [r'\bklm\b', r'\bk\.l\.m\.\b'],
     'airfrance': [
