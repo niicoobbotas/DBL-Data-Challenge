@@ -1,0 +1,382 @@
+import json
+import os
+import re
+from dateutil.parser import parse
+import unicodedata
+from concurrent.futures import ProcessPoolExecutor
+from fuzzywuzzy import fuzz   #pip install python-dateutil fuzzywuzzy langdetect
+from langdetect import detect # Requires: pip install langdetect
+import logging
+
+logging.basicConfig(
+    filename=os.path.join(os.path.dirname(__file__), 'processing.log'),
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+CONFIG = {
+    "WEIRD_CRITERIA": {
+        "max_age_days": 30,
+        "min_followers": 10,
+        "score_threshold": 1.7  # Stricter for non-Lufthansa, non-German tweets
+    },
+    "spam_keywords": [
+        'spam', 'scam', 'fake ticket', 'buy now', 'win free', 'click here',
+        'discount code', 'promo', 'limited offer', 'free trial'
+    ],
+    "spam_patterns": [
+        r'https?://\S+',
+        r'\b\d{1,2}%?\s*(off|discount)\b'
+    ],
+    "min_text_length_for_langdetect": 20
+}
+
+json_dir_path = "/Users/shibai/Documents/TUE study materials/TUE 2024/JBG030 DBL Data/dbl_data_2025"
+output_dir_path = os.path.join(json_dir_path, "../twitter_data_final")
+os.makedirs(output_dir_path, exist_ok=True)
+
+# Airline definitions use regular expression
+airline_variations = {
+    'klm': [r'\bklm\b', r'\bk\.l\.m\.\b'],
+    'airfrance': [
+        r'\bairfrance\b', r'\bair\s*france\b', r'\bAF\b', r'\bAF\d{2,4}\b', r'vol\s+air\s+france'],
+    'british_airways': [r'\bbritish_airways\b',r'\bbritish\s*airways\b', r'\bba\b'],
+    'americanair': [r'\bamericanair\b', r'\bamerican\s*airlines\b', r'\baa\b'],
+    'lufthansa': [r'\blufthansa\b', r'\bdeutsche\s*lufthansa\b', r'\bluftansa\b', r'\blufthanza\b', r'\bLH\b', r'\bLH\d{2,4}\b'],
+    'airberlin': [r'\bairberlin\b',r'\bair\s*berlin\b'],
+    'airberlin assist': [r'\bairberlin\s*assist\b'],
+    'easyjet': [r'\beasyjet\b', r'\beasy\s*jet\b'],
+    'ryanair': [r'\bryanair\b', r'\bryan\s*air\b'],
+    'singaporeair': [r'\bsingaporeair\b', r'\bsingapore\s*airlines\b'],
+    'qantas': [r'\bqantas\b', r'\bQF\b', r'\bQF\d{2,4}\b', r'flying\s+kangaroo'],
+    'etihadairways': [r'\betihadairways\b', r'\betihad\s*airways\b'],
+    'virginatlantic': [r'\bvirginatlantic\b', r'\bvirgin\s*atlantic\b']
+}
+
+AIRLINE_LANG_TOLERANCE = {'lufthansa': 'de', 'airfrance': 'fr', 'klm': 'nl', 'etihadairways': 'ar'}
+
+airline_patterns = [
+    re.compile(pattern, re.IGNORECASE)
+    for patterns in airline_variations.values()
+    for pattern in patterns
+]
+
+AIRLINE_NAMES = list(airline_variations.keys())
+FUZZY_THRESHOLDS = {
+    'klm': 85, 'airfrance': 85, 'british_airways': 90, 'americanair': 90,
+    'lufthansa': 80, 'airberlin': 85, 'easyjet': 85, 'ryanair': 85,
+    'singaporeair': 85, 'qantas': 85, 'etihadairways': 85, 'virginatlantic': 85
+}
+
+spam_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in CONFIG["spam_patterns"]]
+
+def clean_text(text):
+    if not text:
+        return "", False
+    text = unicodedata.normalize('NFKC', text.lower())
+    text = ' '.join(text.split())
+    is_spam = (
+        any(keyword in text for keyword in CONFIG["spam_keywords"]) or
+        any(pattern.search(text) for pattern in spam_patterns)
+    )
+    return text, is_spam
+
+def extract_full_text(tweet):
+    """Extract full text from tweet, handling retweets and different formats."""
+    source = tweet
+    if 'retweeted_status' in tweet:
+        source = tweet['retweeted_status']
+    return (
+        source.get('full_text') or 
+        source.get('extended_tweet', {}).get('full_text') or 
+        source.get('text') or ''
+    )
+
+def validate_tweet(tweet):
+    required_fields = ['created_at', 'id', 'text', 'user']
+    missing = [field for field in required_fields if field not in tweet or tweet[field] is None]
+    if missing:
+        return False, f"Missing fields: {', '.join(missing)}"
+    return True, ""
+
+def extract_relevant_info(tweet):
+    text, is_spam = clean_text(extract_full_text(tweet))
+    urls = tweet.get('entities', {}).get('urls', [])
+    cleaned_urls = [{'url': url.get('url'), 'display_url': url.get('display_url')} for url in urls]
+
+    cleaned_tweet = {
+        'created_at': tweet.get('created_at'),
+        'id': tweet.get('id'),
+        'text': text,
+        'is_spam': is_spam,
+        'lang': tweet.get('lang'),
+        'retweet_count': tweet.get('retweet_count'),
+        'favorite_count': tweet.get('favorite_count'),
+        'in_reply_to_status_id': tweet.get('in_reply_to_status_id'),
+        'in_reply_to_user_id': tweet.get('in_reply_to_user_id'),
+        'in_reply_to_screen_name': tweet.get('in_reply_to_screen_name'),
+        'is_quote_status': tweet.get('is_quote_status'),
+        'quote_count': tweet.get('quote_count'),
+        'reply_count': tweet.get('reply_count'),
+        'place': tweet.get('place'),
+        'favorited': tweet.get('favorited'),
+        'retweeted': tweet.get('retweeted'),
+        'user': {
+            'id': tweet.get('user', {}).get('id'),
+            'screen_name': tweet.get('user', {}).get('screen_name'),
+            'name': tweet.get('user', {}).get('name'),
+            'followers_count': tweet.get('user', {}).get('followers_count'),
+            'friends_count': tweet.get('user', {}).get('friends_count'),
+            'favourites_count': tweet.get('user', {}).get('favourites_count'),
+            'statuses_count': tweet.get('user', {}).get('statuses_count'),
+            'verified': tweet.get('user', {}).get('verified'),
+            'location': tweet.get('user', {}).get('location'),
+            'time_zone': tweet.get('user', {}).get('time_zone'),
+            'created_at': tweet.get('user', {}).get('created_at')
+        },
+        'entities': {
+            'hashtags': tweet.get('entities', {}).get('hashtags'),
+            'user_mentions': tweet.get('entities', {}).get('user_mentions'),
+            'urls': cleaned_urls,
+            'symbols': tweet.get('entities', {}).get('symbols'),
+        }
+    }
+    return cleaned_tweet, None
+
+def is_weird_account(user, tweet_created_at=None, tweet=None):
+    """
+    Determine if an account is 'weird' based on various criteria.
+    Returns (is_weird, reasons) where is_weird is a boolean and reasons is a list of strings.
+    """
+    if not user or not tweet:
+        return True, ["missing_user_info_or_tweet"]
+
+    followers = user.get('followers_count', 0)
+    friends = user.get('friends_count', 0)
+    statuses = user.get('statuses_count', 0)
+    screen_name = user.get('screen_name', '')
+    created_at = user.get('created_at', '')
+    verified = user.get('verified', False)
+    description = user.get('description', '')
+    profile_image = user.get('profile_image_url', '')
+
+    score = 0.0
+    reasons = []
+
+    if followers < CONFIG["WEIRD_CRITERIA"]['min_followers'] and statuses > 5000:
+        score += 0.8
+        reasons.append("low_followers_high_activity")
+    
+    if followers < CONFIG["WEIRD_CRITERIA"]['min_followers'] and friends > 500:
+        score += 0.6 if not verified else 0.2
+        reasons.append("spammy_follow_ratio")
+    
+    if statuses < 10:
+        score += 0.5
+        reasons.append("very_low_tweet_count")
+    
+    if re.fullmatch(r'[a-zA-Z]*\d{5,}', screen_name):
+        score += 0.4
+        reasons.append("autogen_screen_name")
+    
+    if not verified:
+        score += 0.05
+        reasons.append("not_verified")
+    
+    if not description:
+        score += 0.3
+        reasons.append("empty_profile_description")
+    
+    if profile_image and 'default_profile' in profile_image.lower():
+        score += 0.5
+        reasons.append("default_profile_image")
+
+    if created_at and tweet_created_at:
+        try:
+            user_created = parse(created_at, fuzzy=False)
+            tweet_created = parse(tweet_created_at, fuzzy=False)
+            age_days = max((tweet_created - user_created).days, 1)
+
+            if age_days < CONFIG["WEIRD_CRITERIA"]['max_age_days'] and statuses > 500 and followers < CONFIG["WEIRD_CRITERIA"]['min_followers']:
+                score += 0.7
+                reasons.append("new_active_no_followers")
+
+            if statuses / age_days > 100:
+                score += 0.4
+                reasons.append("high_tweet_frequency")
+        except (ValueError, TypeError):
+            reasons.append("skipped_age_check_invalid_date")
+
+    text = extract_full_text(tweet).lower()
+    tweet_lang = tweet.get('lang', '')
+    if len(text) >= CONFIG["min_text_length_for_langdetect"]:
+        try:
+            tweet_lang = detect(text)
+        except Exception as e:
+            logging.warning(f"LangDetect failed for Tweet ID {tweet.get('id', 'unknown')}: {e}")
+
+    for airline, lang_code in AIRLINE_LANG_TOLERANCE.items():
+        if airline in text and tweet_lang == lang_code:
+            score -= 0.2
+            reasons.append(f"{airline}_native_lang_tolerance")
+
+    score_threshold = CONFIG["WEIRD_CRITERIA"]['score_threshold']
+    if 'lufthansa' in text or tweet_lang == 'de':
+        score_threshold = 1.5  
+
+    if score >= score_threshold:
+        reasons.append(f"score={score:.2f}")
+        return True, reasons
+    return False, []
+
+def contains_airline_name_or_is_quote_or_reply(tweet):
+    text = extract_full_text(tweet).lower()
+    is_quote = tweet.get('is_quote_status', False)
+    is_reply = tweet.get('in_reply_to_status_id') is not None
+
+    if any(pattern.search(text) for pattern in airline_patterns):
+        return True
+
+    for airline in AIRLINE_NAMES:
+        threshold = FUZZY_THRESHOLDS.get(airline, 85)
+        score = fuzz.partial_ratio(airline, text)
+        if score > threshold:
+            logging.info(f"Tweet ID {tweet.get('id', 'unknown')} matched airline '{airline}' via fuzzy matching with score {score}")
+            return True
+
+    return is_quote or is_reply
+
+def process_file(filename):
+    print(f"Processing file: {filename}") 
+    json_file_path = os.path.join(json_dir_path, filename)
+    output_file_path = os.path.join(output_dir_path, f"cleaned_{filename}")
+    batch_size = 10000
+    cleaned_tweets = []
+    stats = {
+        'total_lines': 0,
+        'valid_lines': 0,
+        'invalid_lines': 0,
+        'filtered_lines': 0,
+        'weird_accounts': 0,
+        'irrelevant': 0,
+        'spam': 0,
+        'tweets_saved': 0,
+        'reasons_filtered': []
+    }
+
+    try:
+        with open(json_file_path, 'r', encoding='utf-8') as file, \
+             open(output_file_path, 'w', encoding='utf-8') as output_file:
+            for line in file:
+                stats['total_lines'] += 1
+                try:
+                    tweet = json.loads(line.strip())
+                    is_valid, reason = validate_tweet(tweet)
+                    if not is_valid:
+                        stats['invalid_lines'] += 1
+                        stats['reasons_filtered'].append(reason)
+                        continue
+                    stats['valid_lines'] += 1
+
+                    if contains_airline_name_or_is_quote_or_reply(tweet):
+                        cleaned_tweet, error = extract_relevant_info(tweet)
+                        if error or not cleaned_tweet:
+                            stats['invalid_lines'] += 1
+                            stats['reasons_filtered'].append(error or "failed_extraction")
+                            continue
+
+                        if cleaned_tweet['is_spam']:
+                            stats['spam'] += 1
+                            stats['filtered_lines'] += 1
+                            stats['reasons_filtered'].append("spam_keywords_detected")
+                            continue
+
+                        is_weird, reasons = is_weird_account(cleaned_tweet['user'], tweet.get('created_at'), tweet)
+                        if is_weird:
+                            stats['weird_accounts'] += 1
+                            stats['filtered_lines'] += 1
+                            stats['reasons_filtered'].extend(reasons)
+                        else:
+                            if cleaned_tweet['text']:
+                                cleaned_tweets.append(cleaned_tweet)
+                                if len(cleaned_tweets) >= batch_size:
+                                    output_file.writelines(
+                                        json.dumps(t, ensure_ascii=False) + '\n'
+                                        for t in cleaned_tweets
+                                    )
+                                    output_file.flush()
+                                    cleaned_tweets = []
+                    else:
+                        stats['irrelevant'] += 1
+                        stats['filtered_lines'] += 1
+                        stats['reasons_filtered'].append("irrelevant_content")
+                except json.JSONDecodeError as e:
+                    stats['invalid_lines'] += 1
+                    stats['reasons_filtered'].append(f"JSON decode error: {str(e)}")
+
+            if cleaned_tweets:
+                output_file.writelines(
+                    json.dumps(t, ensure_ascii=False) + '\n'
+                    for t in cleaned_tweets
+                )
+                output_file.flush()
+
+    except Exception as e:
+        logging.error(f"Error reading {filename}: {e}")
+        return filename, stats, []
+
+    stats['tweets_saved'] = stats['valid_lines'] - stats['filtered_lines']
+    return filename, stats, cleaned_tweets
+
+def main():
+    json_files = [f for f in os.listdir(json_dir_path) if f.endswith('.json')]
+    total_files = len(json_files)
+    skipped_files = []
+    empty_files = []
+    file_stats = []
+
+    print(f"Found {total_files} JSON files to process.")
+
+    with ProcessPoolExecutor() as executor:
+        results = list(executor.map(process_file, json_files))
+
+    for filename, stats, cleaned_tweets in results:
+        file_stats.append(stats)
+        if stats['tweets_saved'] == 0:
+            empty_files.append(filename)
+        if stats['total_lines'] == stats['invalid_lines']:
+            skipped_files.append(filename)
+
+    summary_path = os.path.join(output_dir_path, "processing_summary.txt")
+    with open(summary_path, 'w', encoding='utf-8') as summary_file:
+        total_processed = sum(stat['total_lines'] for stat in file_stats)
+        total_valid = sum(stat['valid_lines'] for stat in file_stats)
+        total_invalid = sum(stat['invalid_lines'] for stat in file_stats)
+        total_filtered = sum(stat['filtered_lines'] for stat in file_stats)
+        total_weird = sum(stat['weird_accounts'] for stat in file_stats)
+        total_irrelevant = sum(stat['irrelevant'] for stat in file_stats)
+        total_spam = sum(stat['spam'] for stat in file_stats)
+        total_saved = sum(stat['tweets_saved'] for stat in file_stats)
+
+        overall_summary = (
+            "=== Overall Summary ===\n"
+            f"Total files processed: {total_files}\n"
+            f"Files skipped due to read errors: {len(skipped_files)}\n"
+            f"Files with no relevant tweets: {len(empty_files)}\n"
+            f"Total tweets processed: {total_processed}\n"
+            f"  - Valid tweets: {total_valid}\n"
+            f"  - Invalid tweets removed: {total_invalid}\n"
+            f"  - Tweets removed due to weird accounts: {total_weird}\n"
+            f"  - Tweets removed as irrelevant: {total_irrelevant}\n"
+            f"  - Tweets removed as spam: {total_spam}\n"
+            f"Total tweets removed (invalid + filtered): {total_invalid + total_filtered}\n"
+            f"Total tweets kept (saved): {total_saved}\n"
+        )
+
+        summary_file.write(overall_summary)
+
+    print(overall_summary)
+    print(f"Overall summary saved to: {summary_path}")
+
+if __name__ == "__main__":
+    main()
