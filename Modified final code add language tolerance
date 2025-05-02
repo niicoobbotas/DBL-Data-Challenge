@@ -53,14 +53,19 @@ airline_variations = {
     'virginatlantic': [r'\bvirginatlantic\b', r'\bvirgin\s*atlantic\b']
 }
 
+# Language tolerance for specific airlines. If a tweet mentions one of these airlines *and* the tweet's detected language matches the expected native language,
+# we reduce the "weird account" score.
 AIRLINE_LANG_TOLERANCE = {'lufthansa': 'de', 'airfrance': 'fr', 'klm': 'nl', 'etihadairways': 'ar'}
 
+#We use airline_patterns to pre-compile all airline-related regex patterns so we can efficiently and consistently detect airline mentions in tweets, 
+#regardless of case or spelling variations.
 airline_patterns = [
     re.compile(pattern, re.IGNORECASE)
     for patterns in airline_variations.values()
     for pattern in patterns
 ]
 
+#This setup helps detect airline mentions even when users write them informally or with typos.
 AIRLINE_NAMES = list(airline_variations.keys())
 FUZZY_THRESHOLDS = {
     'klm': 85, 'airfrance': 85, 'british_airways': 90, 'americanair': 90,
