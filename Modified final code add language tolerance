@@ -8,6 +8,8 @@ from fuzzywuzzy import fuzz   #pip install python-dateutil fuzzywuzzy langdetect
 from langdetect import detect # Requires: pip install langdetect
 import logging
 
+# It will take you around 25 munites to clean the data.
+
 logging.basicConfig(
     filename=os.path.join(os.path.dirname(__file__), 'processing.log'),
     level=logging.INFO,
