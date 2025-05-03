@@ -3,11 +3,12 @@ import os
 import re
 from typing import Dict, Tuple, List
 from dateutil.parser import parse
-from langdetect import detect
-
 # Input directory containing JSON files
-json_dir_path = "/Users/shibai/Documents/TUE study materials/TUE 2024/JBG030 DBL Data/dbl_data_2025"
-output_dir_path = os.path.join(json_dir_path, "../twitter_data_final")
+json_dir_path = "C:\\Users\\nicol\\OneDrive - TU Eindhoven\\Desktop\\Data Challenge\\data"
+
+# Output directory to store cleaned JSON files
+output_dir_path = "C:\\Users\\nicol\\OneDrive - TU Eindhoven\\Desktop\\Data Challenge\\datacleanedtweets"
+
 os.makedirs(output_dir_path, exist_ok=True)
 
 # List of airline company names
@@ -137,12 +138,6 @@ def is_weird_account(user: Dict, tweet_created_at: str, tweet: Dict) -> Tuple[bo
 
     text = tweet.get('text', '').lower()
     tweet_lang = tweet.get('lang', '')
-    if not tweet_lang or tweet_lang == 'und':
-        if len(text) >= CONFIG["min_text_length_for_langdetect"]:
-            try:
-                tweet_lang = detect(text)
-            except Exception:
-                tweet_lang = ''
 
     for airline, lang_code in AIRLINE_LANG_TOLERANCE.items():
         if airline in text and tweet_lang == lang_code:
