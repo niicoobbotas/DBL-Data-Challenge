@@ -51,7 +51,7 @@ spam_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in CONFIG["spam_
 AIRLINE_KEYWORDS = ['flight', 'airline', 'flew', 'flying', 'plane', 'aviation', 'airport']
 
 # Airline official accounts and domains for spam exemption
-Airline_names = [
+Airline_ACCOUNTS = [
     'KLM', 'AirFrance', 'British_Airways', 'AmericanAir', 'Lufthansa',
     'AirBerlin', 'AirBerlin assist', 'easyJet', 'RyanAir',
     'SingaporeAir', 'Qantas', 'EtihadAirways', 'VirginAtlantic'
