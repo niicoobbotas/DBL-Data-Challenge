@@ -52,10 +52,9 @@ AIRLINE_KEYWORDS = ['flight', 'airline', 'flew', 'flying', 'plane', 'aviation', 
 
 # Airline official accounts and domains for spam exemption
 AIRLINE_ACCOUNTS = [
-    'KLM', 'KLM_UK', 'KLM_NL', 'AirFranceFR', 'AirFrance', 'AirFranceUS',
-    'British_Airways', 'AmericanAir', 'Lufthansa', 'Lufthansa_USA', 'Lufthansa_DE',
-    'airberlin', 'easyJet', 'Ryanair', 'SingaporeAir', 'Qantas',
-    'EtihadAirways', 'VirginAtlantic'
+    'KLM', 'AirFrance', 'British_Airways', 'AmericanAir', 'Lufthansa',
+    'AirBerlin', 'AirBerlin assist', 'easyJet', 'RyanAir',
+    'SingaporeAir', 'Qantas', 'EtihadAirways', 'VirginAtlantic'
 ]
 AIRLINE_DOMAINS = [
     'klm.com', 'klm.nl', 'klm.co.uk', 'airfrance.com', 'airfrance.fr', 'airfrance.us',
