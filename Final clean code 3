@@ -105,7 +105,7 @@ def is_weird_account(user: Dict, tweet_created_at: str, tweet: Dict) -> Tuple[bo
         score += 0.8
         reasons.append("low_followers_high_activity")
     if followers < CONFIG["WEIRD_CRITERIA"]['min_followers'] and friends > 500:
-        score += 0.6 if not verified else 0.2
+        score += 0.8 if not verified else 0.2
         reasons.append("spammy_follow_ratio")
     if statuses < 10:
         score += 0.5
