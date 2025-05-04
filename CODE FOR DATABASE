@@ -38,6 +38,33 @@ AIRLINE_LANG_TOLERANCE = {
     "airfrance": "fr"
 }
 
+# --- Spam filtering patterns ---
+complaint_patterns = [
+    r"\bscam\b",
+    r"\bscammed?\b",
+    r"\bovercharg(?:ed|e)?\b",
+    r"\b(?:change fee|refund|compensate|insurance|fake ticket|rip[\s-]?off|fraud)\b"
+]
+promo_patterns = [
+    r"\b(?:save|get)\s+\d{1,2}%\b",
+    r"\bdeal\b",
+    r"\bsale\b",
+    r"\bbook\b"
+]
+short_url_re = re.compile(r"https?://(?:t\.co|bit\.ly|tinyurl\.com)/", re.IGNORECASE)
+complaint_regex = [re.compile(p, re.IGNORECASE) for p in complaint_patterns]
+promo_regex = [re.compile(p, re.IGNORECASE) for p in promo_patterns]
+
+def is_complaint(text: str) -> bool:
+    """True if text matches any complaint pattern (keep these)."""
+    return any(r.search(text) for r in complaint_regex)
+
+
+def is_promotional_spam(text: str) -> bool:
+    """True if text matches promotional spam (drop if also short URL)."""
+    return any(r.search(text) for r in promo_regex) and bool(short_url_re.search(text))
+
+
 def extract_relevant_info(tweet: Dict) -> Dict:
     urls = tweet.get('entities', {}).get('urls', [])
     cleaned_urls = [{'url': u.get('url'), 'display_url': u.get('display_url')} for u in urls]
@@ -84,10 +111,13 @@ def contains_airline_tag_or_is_quote_or_reply(tweet: Dict) -> bool:
     """Check if the tweet tags an airline, is a quote, or is a reply."""
     user_mentions = tweet.get('entities', {}).get('user_mentions', [])
     tagged_airlines = {m.get('screen_name', '').lower() for m in user_mentions}
-    tags_airline = any(a.lower() in tagged_airlines for a in airline_names)
-    is_quote = tweet.get('is_quote_status', False)
-    is_reply = tweet.get('in_reply_to_status_id') is not None
-    return tags_airline or is_quote or is_reply
+    if any(a.lower() in tagged_airlines for a in airline_names):
+        return True
+    if tweet.get('is_quote_status', False):
+        return True
+    if tweet.get('in_reply_to_status_id') is not None:
+        return True
+    return False
 
 
 def is_weird_account(user: Dict, tweet_created_at: str, tweet: Dict) -> Tuple[bool, List[str]]:
@@ -103,7 +133,6 @@ def is_weird_account(user: Dict, tweet_created_at: str, tweet: Dict) -> Tuple[bo
     description = user.get('description', '')
     profile_image = user.get('profile_image_url', '')
 
-    # Heuristic checks
     if followers < CONFIG["WEIRD_CRITERIA"]['min_followers'] and statuses > 5000:
         score += 0.8; reasons.append("low_followers_high_activity")
     if followers < CONFIG["WEIRD_CRITERIA"]['min_followers'] and friends > 500:
@@ -117,7 +146,6 @@ def is_weird_account(user: Dict, tweet_created_at: str, tweet: Dict) -> Tuple[bo
     if not verified:
         score += 0.2; reasons.append("not_verified")
 
-    # Account age checks
     created_at = user.get('created_at', '')
     if created_at and tweet_created_at:
         try:
@@ -131,7 +159,6 @@ def is_weird_account(user: Dict, tweet_created_at: str, tweet: Dict) -> Tuple[bo
         except (ValueError, TypeError):
             reasons.append("skipped_age_check_invalid_date")
 
-    # Language tolerance
     text = (tweet.get('text') or '').lower()
     tweet_lang = tweet.get('lang', '')
     for airline, lang_code in AIRLINE_LANG_TOLERANCE.items():
@@ -171,7 +198,8 @@ def main():
         'total_lines': 0,
         'processed': 0,
         'weird_accounts': 0,
-        'tweets_saved': 0
+        'tweets_saved': 0,
+        'spam_dropped': 0
     }
 
     for filename in os.listdir(json_dir_path):
@@ -192,6 +220,13 @@ def main():
 
                 if contains_airline_tag_or_is_quote_or_reply(tweet):
                     agg_stats['processed'] += 1
+                    # Get full text for spam check
+                    text = tweet.get('text') or tweet.get('extended_tweet', {}).get('full_text', '')
+                    # Drop promotional spam unless it's a genuine complaint
+                    if not is_complaint(text) and is_promotional_spam(text):
+                        agg_stats['spam_dropped'] += 1
+                        continue
+
                     info = extract_relevant_info(tweet)
                     weird, reasons = is_weird_account(tweet.get('user', {}), tweet.get('created_at'), tweet)
                     info['weird_account'] = weird
