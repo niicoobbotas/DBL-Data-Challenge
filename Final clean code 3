@@ -76,18 +76,18 @@ def extract_relevant_info(tweet):
         }
     }
 
-def contains_airline_name_or_is_quote_or_reply(tweet):
-    text = tweet.get('text', None)
+def contains_airline_tag_or_is_quote_or_reply(tweet):
+    """Check if the tweet tags an airline, is a quote, or is a reply."""
+    # Check if the tweet tags an airline
+    user_mentions = tweet.get('entities', {}).get('user_mentions', [])
+    tagged_airlines = [mention.get('screen_name', '').lower() for mention in user_mentions]
+    tags_airline = any(airline.lower() in tagged_airlines for airline in airline_names)
+
+    # Check if the tweet is a quote or a reply
     is_quote = tweet.get('is_quote_status', False)
     is_reply = tweet.get('in_reply_to_status_id') is not None
 
-    if text is not None:
-        text = text.lower()
-        contains_airline = any(airline.lower() in text for airline in airline_names)
-    else:
-        contains_airline = False
-
-    return contains_airline or is_quote or is_reply
+    return tags_airline or is_quote or is_reply
 
 def is_weird_account(user: Dict, tweet_created_at: str, tweet: Dict) -> Tuple[bool, List[str]]:
     if not user or not tweet:
@@ -165,7 +165,7 @@ for filename in os.listdir(json_dir_path):
                 try:
                     tweet = json.loads(line.strip())
 
-                    if contains_airline_name_or_is_quote_or_reply(tweet):
+                    if contains_airline_tag_or_is_quote_or_reply(tweet):
                         cleaned_tweet = extract_relevant_info(tweet)
                         weird, reasons = is_weird_account(tweet.get('user', {}), tweet.get('created_at'), tweet)
                         cleaned_tweet['weird_account'] = weird
