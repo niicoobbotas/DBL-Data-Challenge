@@ -73,7 +73,7 @@ for bar in bars:
 
 ax.set_title('Tweet Reply Status')
 ax.set_ylabel('Number of Tweets(per million)')
-ax.yaxis.grid(True, linestyle='--', alpha=0.4)
+ax.yaxis.grid(True, linestyle='--', alpha=0.2)
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 
