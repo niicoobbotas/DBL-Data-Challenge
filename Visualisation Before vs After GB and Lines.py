@@ -15,7 +15,7 @@ fig, axs = plt.subplots(1, 2, figsize=(12, 5))
 
 # Plot 1: File Size
 bars1 = axs[0].bar(['Before', 'After'], [file_size_before, file_size_after],
-                   color=['orange', '#4169e1'])
+                   color=['#4169e1', 'orange'])
 for bar in bars1:
     height = bar.get_height()
     axs[0].annotate(f'{height:.2f} GB',
@@ -28,11 +28,11 @@ axs[0].set_title(f'File Size Reduction\n({file_size_change:.1f}% smaller)')
 axs[0].set_ylabel('Size (GB)')
 axs[0].spines['top'].set_visible(False)
 axs[0].spines['right'].set_visible(False)
-axs[0].yaxis.grid(True, linestyle='--', alpha=0.7)
+axs[0].yaxis.grid(True, linestyle='--', alpha=0.2)
 
 # Plot 2: Number of Lines
 bars2 = axs[1].bar(['Before', 'After'], [lines_before, lines_after],
-                   color=['orange', '#4169e1'])
+                   color=['#4169e1', 'orange'])
 for bar in bars2:
     height = bar.get_height()
     axs[1].annotate(f'{height:,}',
@@ -45,10 +45,11 @@ axs[1].set_title(f'Line Count Reduction\n({lines_change:.1f}% fewer lines)')
 axs[1].set_ylabel('Number of Lines')
 axs[1].spines['top'].set_visible(False)
 axs[1].spines['right'].set_visible(False)
-axs[1].yaxis.grid(True, linestyle='--', alpha=0.7)
+axs[1].yaxis.grid(True, linestyle='--', alpha=0.2)
 
 plt.tight_layout()
 plt.show()
+
 
 
 
