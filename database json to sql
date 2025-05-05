@@ -1,0 +1,28 @@
+import os
+import json
+import psycopg2
+
+conn = psycopg2.connect(
+    host="http://dbl.cjiyqqck0poz.eu-west-1.rds.amazonaws.com",
+    dbname="DBL Cork first DB"
+    user="DBL cork",
+    password="DblCork2025"
+    port=5432  
+)
+
+cur = conn.cursor()
+folder_path = 'C:\\Users\\Admin\\Documents\\subjects\\DBL project\\data DBL\\data cleaned'  
+
+for filename in os.listdir(folder_path):
+    if filename.endswith('.json'):
+        file_path = os.path.join(folder_path, filename)
+        with open(file_path, 'r') as f:
+            try:
+                data = json.load(f)  
+                cur.execute("INSERT INTO your_table (data_column) VALUES (%s)", [json.dumps(data)])
+            except Exception as e:
+                print(f"Error in {filename}: {e}")
+
+conn.commit()
+cur.close()
+conn.close()
