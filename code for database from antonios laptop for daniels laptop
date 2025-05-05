@@ -1,0 +1,30 @@
+import os
+import json
+import psycopg2
+
+conn = psycopg2.connect(
+    "host=dbl.cjiyqqck0poz.eu-west-1.rds.amazonaws.com "
+    "port=5432 "
+    "dbname=postgres "
+    "user=postgres "
+    "password=DblCork2025 "
+    "sslmode=require"
+)
+
+
+cur = conn.cursor()
+folder_path = r"C:\Users\20243314\OneDrive - TU Eindhoven\Desktop\Quartile 4\DBL Data Challenge\Cleaned Dataset"
+
+for filename in os.listdir(folder_path):
+    if filename.endswith('.json'):
+        file_path = os.path.join(folder_path, filename)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            try:
+                data = json.load(f)  
+                cur.execute('INSERT INTO "your_table" (data_column) VALUES (%s)', [json.dumps(data)])
+            except Exception as e:
+                print(f"Error in {filename}: {e}")
+
+conn.commit()
+cur.close()
+conn.close()
