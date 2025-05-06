@@ -57,30 +57,28 @@ def plot_tweets_per_language(cleaned_data: List[Dict], save_path: str):
     plt.close()
     print(f"Saved language plot to {save_path}")
 
+# Path to the folder with the cleaned JSON files
+data_folder = r"C:\Users\20244460\OneDrive - TU Eindhoven\Documents\dBL JBAG030 data\dbl cleaned data"
 
-if __name__ == "__main__":
-    # Path to the folder with the cleaned JSON files
-    data_folder = r"C:\Users\20244460\OneDrive - TU Eindhoven\Documents\dBL JBAG030 data\dbl cleaned data"
-    
-    all_cleaned_tweets = []
+all_cleaned_tweets = []
 
-    # Load all JSON files that match the pattern
-    for filename in os.listdir(data_folder):
-        if filename.startswith("cleaned_") and filename.endswith(".json"):
-            file_path = os.path.join(data_folder, filename)
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    tweets = json.load(f)
-                    all_cleaned_tweets.extend(tweets)
-            except json.JSONDecodeError:
-                print(f"Skipping file due to JSON error: {filename}")
-                continue
+# Load all JSON files that match the pattern
+for filename in os.listdir(data_folder):
+    if filename.startswith("cleaned_") and filename.endswith(".json"):
+        file_path = os.path.join(data_folder, filename)
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                tweets = json.load(f)
+                all_cleaned_tweets.extend(tweets)
+        except json.JSONDecodeError:
+            print(f"Skipping file due to JSON error: {filename}")
+            continue
 
-    # Define output path for the plot in the desired folder
-    output_plot_path = r"C:\Users\20244460\OneDrive - TU Eindhoven\Documents\dBL JBAG030 data\dbl cleaned data\plots\language_distribution.png"
+# Define output path for the plot in the desired folder
+output_plot_path = r"C:\Users\20244460\OneDrive - TU Eindhoven\Documents\dBL JBAG030 data\dbl cleaned data\plots\language_distribution.png"
 
-    # Create the "plots" directory if it doesn't exist
-    os.makedirs(os.path.dirname(output_plot_path), exist_ok=True)
+# Create the "plots" directory if it doesn't exist
+os.makedirs(os.path.dirname(output_plot_path), exist_ok=True)
 
-    # Call the function
-    plot_tweets_per_language(all_cleaned_tweets, output_plot_path)
+# Call the function
+plot_tweets_per_language(all_cleaned_tweets, output_plot_path)
