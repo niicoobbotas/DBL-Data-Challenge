@@ -13,7 +13,6 @@ airline_ids = {
 }
 
 def extract_conversations(tweets):
-    """Extract conversations between a user and an airline."""
     conversations = []
     processed_tweets = set()
 
