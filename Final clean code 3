@@ -3,22 +3,19 @@ import os
 import re
 from typing import Dict, Tuple, List
 from dateutil.parser import parse
-# Input directory containing JSON files
+
 json_dir_path = "C:\\Users\\nicol\\OneDrive - TU Eindhoven\\Desktop\\Data Challenge\\data"
 
-# Output directory to store cleaned JSON files
 output_dir_path = "C:\\Users\\nicol\\OneDrive - TU Eindhoven\\Desktop\\Data Challenge\\datacleanedtweets"
 
 os.makedirs(output_dir_path, exist_ok=True)
 
-# List of airline company names
 airline_names = [
     'KLM', 'AirFrance', 'British_Airways', 'AmericanAir', 'Lufthansa',
     'AirBerlin', 'AirBerlin assist', 'easyJet', 'RyanAir',
     'SingaporeAir', 'Qantas', 'EtihadAirways', 'VirginAtlantic'
 ]
 
-# Configurations
 CONFIG = {
     "WEIRD_CRITERIA": {
         "min_followers": 20,
@@ -77,7 +74,6 @@ def extract_relevant_info(tweet):
     }
 
 def contains_airline_tag_or_is_quote_or_reply(tweet):
-    """Check if the tweet tags an airline, is a quote, or is a reply."""
     # Check if the tweet tags an airline
     user_mentions = tweet.get('entities', {}).get('user_mentions', [])
     tagged_airlines = [mention.get('screen_name', '').lower() for mention in user_mentions]
